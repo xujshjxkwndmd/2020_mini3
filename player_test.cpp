@@ -28,6 +28,22 @@ struct Point {
 
 int player;
 const int SIZE = 8;
+#define corner 500
+#define edge 15
+#define inEgde 0
+#define central 0
+#define midEdge 0
+#define danger -30
+int score[8][8] = {
+    { corner, danger, edge, edge, edge, edge, danger, corner},
+    { danger, danger, midEdge, midEdge, midEdge, midEdge, danger, danger},
+    { edge, midEdge, inEgde, inEgde, inEgde, inEgde, midEdge, edge},
+    { edge, midEdge, inEgde, central, central, inEgde, midEdge, edge},
+    { edge, midEdge, inEgde, central, central, inEgde, midEdge, edge},
+    { edge, midEdge, inEgde, inEgde, inEgde, inEgde, midEdge, edge},
+    { danger, danger, midEdge, midEdge, midEdge, midEdge, danger, danger},
+    { corner, danger, edge, edge, edge, edge, danger, corner},
+};
 std::array<std::array<int, SIZE>, SIZE> curboard;
 std::vector<Point> next_valid_spots;
 enum SPOT_STATE {
@@ -36,11 +52,12 @@ enum SPOT_STATE {
         WHITE = 2
 };
 
-const std::array<Point, 8> directions{{
+const std::array<Point, 8> directions{
         Point(-1, -1), Point(-1, 0), Point(-1, 1),
         Point(0, -1), /*{0, 0}, */Point(0, 1),
         Point(1, -1), Point(1, 0), Point(1, 1)
-}};
+};
+
 
 class Status{
 public:
@@ -139,12 +156,14 @@ public:
                 else if(board[i][j] == WHITE) disc_count[WHITE]++;
             }
         }
+        disc_count[WHITE] = preMove.disc_count[WHITE];
+        disc_count[BLACK] = preMove.disc_count[BLACK];
         disc_count[EMPTY] -= disc_count[WHITE] + disc_count[BLACK];
         cur_player = preMove.cur_player;
-        next_valid_spots = preMove.next_valid_spots;
+        // next_valid_spots = get_valid_spots();
         value = 0;
     }
-    std::vector<Point> get_valid_spots() const {
+    std::vector<Point> get_valid_spots() {
         std::vector<Point> valid_spots;
         for (int i = 0; i < SIZE; i++) {
             for (int j = 0; j < SIZE; j++) {
@@ -155,66 +174,192 @@ public:
                     valid_spots.push_back(p);
             }
         }
+        // std::cout << "get valids: " << valid_spots.size() << std::endl;
         return valid_spots;
     }
     void setValue(){
         value = 0;
+        /* game end */
+        if(disc_count[EMPTY] == 0){
+            if(disc_count[cur_player] > disc_count[3-cur_player])
+                value = 100000;
+            else if(disc_count[cur_player] < disc_count[3-cur_player])
+                value = -100000;
+            return;
+        }
+
+        /* next value */
+        // available moves
+        if(next_valid_spots.size() == 0){
+            value = -100000;
+            return;
+        }
+        value += next_valid_spots.size()/2;
+        // find corner
         if(find(next_valid_spots.begin(), next_valid_spots.end(), Point(0, 0)) != next_valid_spots.end())
-                value += 2;
+            value += 150;
         if(find(next_valid_spots.begin(), next_valid_spots.end(), Point(0, 7)) != next_valid_spots.end())
-            value += 2;
+            value += 150;
         if(find(next_valid_spots.begin(), next_valid_spots.end(), Point(7, 0)) != next_valid_spots.end())
-            value += 2;
+            value += 150;
         if(find(next_valid_spots.begin(), next_valid_spots.end(), Point(7, 7)) != next_valid_spots.end())
-            value += 2;
-        if(cur_player == 1){ // black or O
-            if(board[0][0] == BLACK) value += 3;
-            if(board[0][7] == BLACK) value += 3;
-            if(board[7][0] == BLACK) value += 3;
-            if(board[7][7] == BLACK) value += 3;
+            value += 150;
+        // find edges
+        /*for(Point step : next_valid_spots){
+            if(i == 0 || i == 7) value += 10;
+            if(j == 0 || j == 7) value += 10;
         }
-        else{ // white or X
-            if(board[0][0] == WHITE) value += 3;
-            if(board[0][7] == WHITE) value += 3;
-            if(board[7][0] == WHITE) value += 3;
-            if(board[7][7] == WHITE) value += 3;
+            if(step.x == 0 || step.x == 7) value += 10;
+            if(step.y == 0 || step.y == 7) value += 10;
+        }*/
+
+        /* now value */
+        // location value
+        for(int i = 0; i < 8; ++i){
+            for(int j = 0; j < 8; ++j){
+                if(board[i][j] == cur_player){
+                    // if(i == 0 || i == 7) value += 10;
+                    // if(j == 0 || j == 7) value += 10;
+                    value += score[i][j];
+                }
+            }
         }
+        // find wall
+        if(board[0][0] == cur_player){
+            for(int i = 1; i < 8; ++i){
+                if(board[0][i] != cur_player)
+                    break;
+                value += 30;
+            }
+            for(int i = 1; i < 8; ++i){
+                if(board[i][0] != cur_player)
+                    break;
+                value += 30;
+            }
+            for(int i = 1; i < 8; ++i){
+                if(board[i][i] != cur_player)
+                    break;
+                value += 50;
+            }
+        }
+        if(board[0][7] == cur_player){
+            for(int i = 1; i < 8; ++i){
+                if(board[0][i] != cur_player)
+                    break;
+                value += 30;
+            }
+            for(int i = 1; i < 8; ++i){
+                if(board[i][7] != cur_player)
+                    break;
+                value += 30;
+            }
+            for(int i = 1; i < 8; ++i){
+                if(board[i][7-i] != cur_player)
+                    break;
+                value += 50;
+            }
+        }
+        if(board[7][0] == cur_player){
+            for(int i = 1; i < 8; ++i){
+                if(board[7][i] != cur_player)
+                    break;
+                value += 30;
+            }
+            for(int i = 1; i < 8; ++i){
+                if(board[i][0] != cur_player)
+                    break;
+                value += 30;
+            }
+            for(int i = 1; i < 8; ++i){
+                if(board[7-i][i] != cur_player)
+                    break;
+                value += 50;
+            }
+        }
+        if(board[7][7] == cur_player){
+            for(int i = 1; i < 8; ++i){
+                if(board[7][i] != cur_player)
+                    break;
+                value += 30;
+            }
+            for(int i = 1; i < 8; ++i){
+                if(board[i][7] != cur_player)
+                    break;
+                value += 30;
+            }
+            for(int i = 1; i < 8; ++i){
+                if(board[7-i][7-i] != cur_player)
+                    break;
+                value += 50;
+            }
+        }
+        // discs amount
+        value += disc_count[cur_player];
+        /*if(disc_count[EMPTY] > 29){
+            value -= disc_count[cur_player];
+        }
+        else{
+            value += disc_count[cur_player]*2;
+        }*/
+
     }
 };
 
 int minimax(Status curMove, int depth, int a, int b){
+    if(curMove.disc_count[EMPTY] == 0){
+        if(curMove.disc_count[curMove.cur_player] > curMove.disc_count[3-curMove.cur_player])
+            return INF;
+        else if(curMove.disc_count[curMove.cur_player] < curMove.disc_count[3-curMove.cur_player])
+            return -INF;
+        return 0;
+    }
+    curMove.next_valid_spots = curMove.get_valid_spots();
     if(depth == 0){
         curMove.setValue();
+        /*if(curMove.value == 309)
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++) {
+                std::cout << curMove.board[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }*/
+        // std::cout << "setvalue: " << curMove.value << std::endl;
+        // std::cout << "depth 0: " << curMove.value << std::endl;
         return curMove.value;
     }
     int value;
-    curMove.get_valid_spots();
     if(curMove.cur_player == player){
         value = INF;
         for(Point step : curMove.next_valid_spots){
             Status nxtMove = curMove;
             nxtMove.flip_discs(step);
+            nxtMove.board[step.x][step.y] = curMove.cur_player;
             nxtMove.cur_player = 3-curMove.cur_player;
             value = std::min(value, minimax(nxtMove, depth-1, a, b));
+            // std::cout << "min value: " << value << std::endl;
             a = std::max(a, value);
             if(a >= b) break;
         }
+        if(curMove.next_valid_spots.size() == 0)
+            value = -INF;
     }
     else{
         value = -INF;
         for(Point step : curMove.next_valid_spots){
             Status nxtMove = curMove;
             nxtMove.flip_discs(step);
+            nxtMove.board[step.x][step.y] = curMove.cur_player;
             nxtMove.cur_player = 3-curMove.cur_player;
             value = std::max(value, minimax(nxtMove, depth-1, a, b));
+            // std::cout << "max value: " << value << " depth: " << depth << std::endl;
             b = std::min(b, value);
             if(a >= b) break;
         }
+        // std::cout << "break point: " << value << std::endl;
     }
-
+    // std::cout << "return value: " << value << " depth: " << depth << std::endl;
     return value;
 }
-
 
 void read_board() {
     std::cin >> player;
@@ -249,30 +394,45 @@ void write_valid_spot() {
             else if(curboard[i][j] == WHITE) curMove.disc_count[WHITE]++;
         }
     }
-    int value = -INF;
-    for(Point step : next_valid_spots){
-        /*int n_valid_spots = next_valid_spots.size();
-        srand(time(NULL));
-        int index = (rand() % n_valid_spots);
-        Point p = next_valid_spots[index];
-        fout << p.x << " " << p.y << std::endl;
-        fout.flush();*/
+    int value = INF;
+    int x, y;
+    /*for(Point step : next_valid_spots){
         Status nxtMove = curMove;
         nxtMove.flip_discs(step);
         nxtMove.cur_player = 3-curMove.cur_player;
-        int v = minimax(nxtMove, 0, -INF, INF);
-        // printf("v: %d\n", v);
-        if(v > value){
+        int v = minimax(nxtMove, 1, -INF, INF);
+        if(v >= value){
             value = v;
-            std::cout << step.x << " " << step.y << std::endl;
+            x = step.x, y = step.y;
+            // fout << step.x << " " << step.y << std::endl;
+            // fout.flush();
+        }
+    }*/
+    for(Point step : next_valid_spots){
+        Status nxtMove = curMove;
+        nxtMove.flip_discs(step);
+        nxtMove.board[step.x][step.y] = curMove.cur_player;
+        nxtMove.cur_player = 3-curMove.cur_player;
+        int v = minimax(nxtMove, 6, -INF, INF);
+        if(v <= value){
+            value = v;
+            x = step.x, y = step.y;
+            std::cout << x << " " << y << " " << v << std::endl;
+            // fout << step.x << " " << step.y << std::endl;
+            // fout.flush();
         }
     }
+    std::cout << x << " " << y << std::endl;
+    // fout.flush();
 }
 
-int main(int, char** argv) {
+int main() {
+    //std::ifstream fin(argv[1]);
+    //std::ofstream fout(argv[2]);
     read_board();
     read_valid_spots();
     write_valid_spot();
+    //fin.close();
+    //fout.close();
     return 0;
 }
-
